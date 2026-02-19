@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"; // Импортируем наш клиент
+import { supabase } from "@/lib/supabase"; 
 import { ArrowRight, GraduationCap, Loader2, Lock, Mail, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -8,7 +8,6 @@ export default function Login() {
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // Состояния для полей
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -19,20 +18,18 @@ export default function Login() {
 
     try {
       if (isRegister) {
-        // РЕГИСТРАЦИЯ
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              full_name: fullName, // Эти данные уйдут в metadata
+              full_name: fullName,
             },
           },
         });
         if (error) throw error;
         alert("Проверьте почту для подтверждения регистрации!");
       } else {
-        // ВХОД
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -55,12 +52,12 @@ export default function Login() {
             <GraduationCap className="h-8 w-8 text-primary" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">
-            {isRegister ? "Create your account" : "Welcome back"}
+            {isRegister ? "Создать аккаунт" : "С возвращением"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {isRegister
-              ? "Join EduStream and start learning today"
-              : "Sign in to continue learning"}
+              ? "Присоединяйтесь к EduStream и начните обучение"
+              : "Войдите, чтобы продолжить обучение"}
           </p>
         </div>
 
@@ -69,7 +66,7 @@ export default function Login() {
             {isRegister && (
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground">
-                  Full Name
+                  Полное имя
                 </label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -78,7 +75,7 @@ export default function Login() {
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="John Doe"
+                    placeholder="Иван Иванов"
                     className="w-full rounded-lg border border-input bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
@@ -95,14 +92,14 @@ export default function Login() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="example@mail.com"
                   className="w-full rounded-lg border border-input bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground">
-                Password
+                Пароль
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -126,7 +123,7 @@ export default function Login() {
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  {isRegister ? "Create Account" : "Sign In"}
+                  {isRegister ? "Создать аккаунт" : "Войти"}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
@@ -134,12 +131,12 @@ export default function Login() {
           </form>
 
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
+            {isRegister ? "Уже есть аккаунт?" : "Нет аккаунта?"}{" "}
             <button
               onClick={() => setIsRegister(!isRegister)}
               className="font-medium text-primary hover:underline"
             >
-              {isRegister ? "Sign in" : "Sign up"}
+              {isRegister ? "Войти" : "Зарегистрироваться"}
             </button>
           </div>
         </div>
