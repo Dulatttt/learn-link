@@ -57,9 +57,9 @@ export default function Rooms() {
               Присоединяйся к обсуждению или создай свою учебную сессию.
             </p>
           </div>
-          <button className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+          {/* <button className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-primary/20 transition-all hover:scale-105 active:scale-95">
             <Plus className="h-5 w-5" /> Создать комнату
-          </button>
+          </button> */}
         </div>
 
         {/* Filters & Search Bar */}
