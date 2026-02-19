@@ -1,93 +1,152 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
-import { Users, Search } from "lucide-react";
-
-const allRooms = [
-  { id: 1, title: "Calculus Study Group", topic: "Math", participants: 5, isLive: true, description: "Working through integration techniques together." },
-  { id: 2, title: "Python Basics", topic: "IT", participants: 3, isLive: true, description: "Beginner-friendly Python programming session." },
-  { id: 3, title: "Quantum Mechanics", topic: "Physics", participants: 2, isLive: false, description: "Deep dive into quantum states and wavefunctions." },
-  { id: 4, title: "Linear Algebra", topic: "Math", participants: 0, isLive: false, description: "Matrix operations and vector spaces." },
-  { id: 5, title: "Web Development", topic: "IT", participants: 7, isLive: true, description: "Building modern web applications with React." },
-  { id: 6, title: "Thermodynamics", topic: "Physics", participants: 1, isLive: false, description: "Heat transfer and energy conversion concepts." },
-];
+import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
+import { Hash, Loader2, Plus, Search, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 const topics = ["All", "Math", "Physics", "IT"];
 
 export default function Rooms() {
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = allRooms.filter(
-    (r) =>
-      (filter === "All" || r.topic === filter) &&
-      r.title.toLowerCase().includes(search.toLowerCase())
+  // Загрузка данных из Supabase
+  useEffect(() => {
+    async function fetchRooms() {
+      setLoading(true);
+      try {
+        let query = supabase.from('rooms').select('*');
+
+        // Если выбран фильтр, отличный от "All", добавляем условие
+        if (filter !== "All") {
+          query = query.eq('category', filter);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setRooms(data || []);
+      } catch (error: any) {
+        console.error("Error fetching rooms:", error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchRooms();
+  }, [filter]);
+
+  // Фильтрация по поиску на стороне клиента
+  const filteredRooms = rooms.filter((r) =>
+    r.name.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Study Rooms</h1>
-          <p className="text-sm text-muted-foreground">Join a room or create your own study session.</p>
+      <div className="space-y-8 pb-10">
+        {/* Header Section */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-4xl font-black uppercase tracking-tighter italic italic text-foreground">
+              Study Rooms
+            </h1>
+            <p className="text-sm font-medium text-muted-foreground">
+              Присоединяйся к обсуждению или создай свою учебную сессию.
+            </p>
+          </div>
+          <button className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+            <Plus className="h-5 w-5" /> Создать комнату
+          </button>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2">
+        {/* Filters & Search Bar */}
+        <div className="flex flex-col gap-4 rounded-[2rem] border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
             {topics.map((t) => (
               <button
                 key={t}
                 onClick={() => setFilter(t)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={cn(
+                  "whitespace-nowrap rounded-xl px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all",
                   filter === t
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                }`}
+                    ? "bg-primary text-white shadow-lg shadow-primary/20"
+                    : "bg-secondary text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
               >
                 {t}
               </button>
             ))}
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search rooms..."
+              placeholder="Поиск комнат..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-input bg-card py-2 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-64"
+              className="w-full rounded-2xl border border-border bg-muted/30 py-3 pl-11 pr-4 text-sm font-medium focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 sm:w-72 transition-all"
             />
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((room) => (
-            <Link
-              key={room.id}
-              to={`/rooms/${room.id}`}
-              className="group rounded-xl border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-foreground">
-                  {room.topic}
-                </span>
-                {room.isLive && (
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-live">
-                    <span className="h-2 w-2 rounded-full bg-live animate-pulse-live" />
-                    Live
+        {/* Content Section */}
+        {loading ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Загрузка комнат...</p>
+          </div>
+        ) : filteredRooms.length > 0 ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredRooms.map((room) => (
+              <Link
+                key={room.id}
+                to={`/rooms/${room.id}`}
+                className="group relative flex flex-col rounded-[2.5rem] border-2 border-border bg-card p-8 transition-all hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/5"
+              >
+                <div className="mb-5 flex items-center justify-between">
+                  <span className="rounded-lg bg-secondary px-3 py-1 text-[10px] font-black uppercase tracking-widest text-foreground">
+                    {room.category}
                   </span>
-                )}
-              </div>
-              <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                {room.title}
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{room.description}</p>
-              <p className="mt-3 flex items-center gap-1 text-sm text-muted-foreground">
-                <Users className="h-3.5 w-3.5" /> {room.participants} participants
-              </p>
-            </Link>
-          ))}
-        </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-success">
+                    <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                    Live
+                  </div>
+                </div>
+
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                    <Hash className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-xl font-bold leading-tight text-foreground group-hover:text-primary transition-colors">
+                    {room.name}
+                  </h3>
+                </div>
+
+                <p className="mb-6 line-clamp-2 text-sm font-medium italic text-muted-foreground">
+                  "{room.description || "Нет описания для этой комнаты."}"
+                </p>
+
+                <div className="mt-auto flex items-center justify-between border-t border-border pt-6">
+                  <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span>{room.participants_count || 0} участников</span>
+                  </div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary transition-all group-hover:bg-primary group-hover:text-white group-hover:rotate-90">
+                    <Plus className="h-4 w-4" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-64 flex-col items-center justify-center rounded-[3rem] border-2 border-dashed border-border p-10 text-center">
+            <p className="text-lg font-bold text-muted-foreground">Комнаты не найдены</p>
+            <p className="text-sm text-muted-foreground/60">Попробуйте изменить фильтр или поисковый запрос.</p>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

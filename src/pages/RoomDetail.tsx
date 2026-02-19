@@ -1,202 +1,136 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import {
-  Mic,
-  MicOff,
-  Video as VideoIcon,
-  VideoOff,
-  Monitor,
-  PhoneOff,
-  Send,
-  ArrowLeft,
-  Users,
-  Check,
-  X,
-} from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { ArrowLeft, MessageSquare, Mic, MicOff, PhoneOff, Send, Users, Video as VideoIcon, VideoOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
-const mockParticipants = [
-  { id: 1, name: "Alice M.", isSelf: false },
-  { id: 2, name: "Bob K.", isSelf: false },
-  { id: 3, name: "You", isSelf: true },
-  { id: 4, name: "Dana R.", isSelf: false },
-];
-
-const mockChat = [
-  { id: 1, user: "System", text: "Alice M. joined the room", isSystem: true },
-  { id: 2, user: "Alice M.", text: "Hey everyone, ready to start?", isSystem: false },
-  { id: 3, user: "Bob K.", text: "Let's go! Chapter 5 today?", isSystem: false },
-];
-
-const mockWaiting = [{ id: 10, name: "Charlie W." }];
+const iceServers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
 export default function RoomDetail() {
-  const { id } = useParams();
+  const { id: roomId } = useParams();
+  const navigate = useNavigate();
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [chatOpen, setChatOpen] = useState(true);
-  const [messages, setMessages] = useState(mockChat);
+  const [messages, setMessages] = useState<any[]>([]);
   const [newMsg, setNewMsg] = useState("");
-  const [waiting, setWaiting] = useState(mockWaiting);
+  const [myId, setMyId] = useState<string>("");
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStreams, setRemoteStreams] = useState<{id: string, stream: MediaStream, name: string}[]>([]);
+  
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const channelRef = useRef<any>(null);
+  const peersRef = useRef<Record<string, RTCPeerConnection>>({});
 
   const sendMessage = () => {
-    if (!newMsg.trim()) return;
-    setMessages([...messages, { id: Date.now(), user: "You", text: newMsg, isSystem: false }]);
+    if (!newMsg.trim() || !channelRef.current) return;
+    const msg = { user: "Я", text: newMsg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
+    setMessages(prev => [...prev, msg]);
     setNewMsg("");
   };
 
-  const approveUser = (userId: number) => {
-    const user = waiting.find((w) => w.id === userId);
-    setWaiting(waiting.filter((w) => w.id !== userId));
-    if (user) {
-      setMessages([...messages, { id: Date.now(), user: "System", text: `${user.name} joined the room`, isSystem: true }]);
+  useEffect(() => {
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setMyId(user.id);
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setLocalStream(stream);
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+
+        const channel = supabase.channel(`room:${roomId}`);
+        channelRef.current = channel;
+
+        channel
+          .on('broadcast', { event: 'signal' }, async ({ payload }) => {
+            if (payload.target !== user.id) return;
+            // WebRTC Logic... (handleSignal call here)
+          })
+          .on('broadcast', { event: 'chat' }, ({ payload }) => setMessages(prev => [...prev, payload]))
+          .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+              await supabase.rpc('increment_participants', { room_id: roomId });
+              await channel.track({ user_id: user.id });
+            }
+          });
+      } catch (err) { console.error(err); }
     }
-  };
+    init();
+
+    return () => {
+      supabase.rpc('decrement_participants', { room_id: roomId });
+      localStream?.getTracks().forEach(t => t.stop());
+      channelRef.current?.unsubscribe();
+    };
+  }, [roomId]);
 
   return (
-    <div className="flex h-screen flex-col bg-foreground/[0.03]">
-      {/* Top bar */}
-      <div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
-        <div className="flex items-center gap-3">
-          <Link to="/rooms" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary">
+    <div className="fixed inset-0 flex flex-col bg-[#f8f9fa] z-[9999] overflow-hidden text-foreground">
+      <div className="flex h-16 items-center justify-between border-b bg-white px-6 shadow-sm shrink-0">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate('/rooms')} className="rounded-full bg-slate-100 p-2 hover:bg-slate-200 transition-all">
             <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <h1 className="text-sm font-semibold text-foreground">Calculus Study Group</h1>
-          <span className="flex items-center gap-1.5 text-xs font-medium text-live">
-            <span className="h-2 w-2 rounded-full bg-live animate-pulse-live" />
-            Live
-          </span>
+          </button>
+          <h1 className="text-sm font-bold uppercase italic">Комната: {roomId?.slice(0,8)}</h1>
         </div>
-        <button
-          onClick={() => setChatOpen(!chatOpen)}
-          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary lg:hidden"
-        >
-          Chat
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">
+            <Users size={14} className="text-primary" /> {remoteStreams.length + 1} В СЕТИ
+          </div>
+          <button onClick={() => setChatOpen(!chatOpen)} className={cn("p-2 rounded-full", chatOpen ? "bg-primary/10 text-primary" : "bg-slate-100")}>
+            <MessageSquare size={20} />
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Video Grid */}
-        <div className="flex flex-1 flex-col">
-          {/* Waiting room notification */}
-          {waiting.length > 0 && (
-            <div className="m-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
-              <p className="mb-2 text-sm font-medium text-foreground">Waiting Room</p>
-              {waiting.map((w) => (
-                <div key={w.id} className="flex items-center justify-between">
-                  <span className="text-sm text-foreground">{w.name}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => approveUser(w.id)}
-                      className="rounded-md bg-success px-3 py-1 text-xs font-medium text-success-foreground hover:bg-success/90"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setWaiting(waiting.filter((x) => x.id !== w.id))}
-                      className="rounded-md bg-destructive px-3 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+      <div className="flex flex-1 overflow-hidden relative">
+        <div className="relative flex flex-1 p-4 bg-slate-50 overflow-hidden">
+          <div className={cn("grid h-full w-full gap-4 transition-all", remoteStreams.length === 0 ? "grid-cols-1" : "grid-cols-2")}>
+            <div className="relative overflow-hidden rounded-[2rem] border-4 border-white bg-slate-200 shadow-lg">
+              <video ref={localVideoRef} autoPlay muted playsInline className={cn("h-full w-full object-cover", !camOn && "hidden")} />
+              {!camOn && <div className="absolute inset-0 flex items-center justify-center bg-slate-300"><VideoOff size={64} className="text-slate-400" /></div>}
+              <div className="absolute bottom-4 left-4 rounded-full bg-black/50 px-3 py-1 text-[10px] font-bold text-white">Вы</div>
+            </div>
+            {/* Рендер удаленных видео... */}
+          </div>
+
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 rounded-3xl bg-white/90 p-4 shadow-2xl backdrop-blur-md border border-white z-50">
+            <button onClick={() => { localStream?.getAudioTracks().forEach(t => t.enabled = !micOn); setMicOn(!micOn); }}
+              className={cn("flex h-12 w-12 items-center justify-center rounded-2xl transition-all", micOn ? "bg-slate-100" : "bg-red-500 text-white")}>
+              {micOn ? <Mic size={20}/> : <MicOff size={20}/>}
+            </button>
+            <button onClick={() => { localStream?.getVideoTracks().forEach(t => t.enabled = !camOn); setCamOn(!camOn); }}
+              className={cn("flex h-12 w-12 items-center justify-center rounded-2xl transition-all", camOn ? "bg-slate-100" : "bg-red-500 text-white")}>
+              {camOn ? <VideoIcon size={20}/> : <VideoOff size={20}/>}
+            </button>
+            <button onClick={() => navigate('/rooms')} className="flex h-12 px-6 items-center justify-center gap-2 rounded-2xl bg-red-600 text-white font-bold uppercase text-xs">
+              <PhoneOff size={18} /> Выйти
+            </button>
+          </div>
+        </div>
+
+        {chatOpen && (
+          <div className="flex w-80 flex-col border-l bg-white shadow-xl shrink-0">
+            <div className="p-4 border-b font-bold text-xs uppercase bg-slate-50">Чат</div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((m, i) => (
+                <div key={i} className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-primary uppercase">{m.user}</span>
+                  <p className="rounded-2xl rounded-tl-none bg-slate-100 p-3 text-sm font-medium">{m.text}</p>
                 </div>
               ))}
             </div>
-          )}
-
-          <div className="grid flex-1 grid-cols-2 gap-3 p-4">
-            {mockParticipants.map((p) => (
-              <div
-                key={p.id}
-                className={cn(
-                  "relative flex items-center justify-center rounded-xl bg-foreground/5 border border-border",
-                  p.isSelf && "ring-2 ring-primary/40"
-                )}
-              >
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <span className="text-lg font-semibold text-primary">{p.name[0]}</span>
-                </div>
-                <span className="absolute bottom-3 left-3 rounded-md bg-foreground/70 px-2 py-0.5 text-xs font-medium text-background">
-                  {p.name}
-                </span>
+            <div className="p-4 border-t">
+              <div className="flex gap-2 bg-slate-100 rounded-xl p-2">
+                <input value={newMsg} onChange={e => setNewMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder="Сообщение..." className="flex-1 bg-transparent px-2 text-sm outline-none" />
+                <button onClick={sendMessage} className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-md"><Send size={14}/></button>
               </div>
-            ))}
-          </div>
-
-          {/* Controls */}
-          <div className="flex items-center justify-center gap-3 border-t border-border bg-card p-3">
-            <button
-              onClick={() => setMicOn(!micOn)}
-              className={cn(
-                "rounded-full p-3 transition-colors",
-                micOn ? "bg-secondary text-foreground hover:bg-secondary/80" : "bg-destructive text-destructive-foreground"
-              )}
-            >
-              {micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
-            </button>
-            <button
-              onClick={() => setCamOn(!camOn)}
-              className={cn(
-                "rounded-full p-3 transition-colors",
-                camOn ? "bg-secondary text-foreground hover:bg-secondary/80" : "bg-destructive text-destructive-foreground"
-              )}
-            >
-              {camOn ? <VideoIcon className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-            </button>
-            <button className="rounded-full bg-secondary p-3 text-foreground hover:bg-secondary/80">
-              <Monitor className="h-5 w-5" />
-            </button>
-            <Link
-              to="/rooms"
-              className="rounded-full bg-destructive p-3 text-destructive-foreground hover:bg-destructive/90"
-            >
-              <PhoneOff className="h-5 w-5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Chat Sidebar */}
-        <div
-          className={cn(
-            "flex w-80 flex-col border-l border-border bg-card transition-all",
-            chatOpen ? "translate-x-0" : "translate-x-full hidden"
-          )}
-        >
-          <div className="flex h-12 items-center border-b border-border px-4">
-            <span className="text-sm font-semibold text-foreground">Chat</span>
-          </div>
-          <div className="flex-1 space-y-3 overflow-auto p-4">
-            {messages.map((m) => (
-              <div key={m.id}>
-                {m.isSystem ? (
-                  <p className="text-center text-xs text-muted-foreground italic">{m.text}</p>
-                ) : (
-                  <div>
-                    <p className="text-xs font-medium text-foreground">{m.user}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{m.text}</p>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-border p-3">
-            <div className="flex gap-2">
-              <input
-                value={newMsg}
-                onChange={(e) => setNewMsg(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder="Type a message..."
-                className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-              <button
-                onClick={sendMessage}
-                className="rounded-lg bg-primary p-2 text-primary-foreground hover:bg-primary/90"
-              >
-                <Send className="h-4 w-4" />
-              </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
