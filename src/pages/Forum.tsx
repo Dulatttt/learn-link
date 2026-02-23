@@ -67,7 +67,7 @@ const fetchQuestions = async () => {
             to="/forum/ask" 
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-all active:scale-95"
           >
-            <Plus className="h-5 w-5" /> Ask Question
+            <Plus className="h-5 w-5" /> Задать вопрос
           </Link>
         </div>
 
