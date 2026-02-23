@@ -16,15 +16,14 @@ export default function TestTaking() {
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [xpGained, setXpGained] = useState(0);
 
   useEffect(() => {
     loadQuizData();
   }, [id]);
 
   async function loadQuizData() {
-    // Грузим инфу о тесте
     const { data: quizData } = await supabase.from('quizzes').select('*').eq('id', id).single();
-    // Грузим вопросы
     const { data: qData } = await supabase.from('quiz_questions').select('*').eq('quiz_id', id);
     
     setQuiz(quizData);
@@ -35,7 +34,6 @@ export default function TestTaking() {
   const handleNext = () => {
     if (selectedOption === null) return;
 
-    // Проверяем правильность
     if (selectedOption === questions[currentStep].correct_option_index) {
       setScore(prev => prev + 1);
     }
@@ -52,30 +50,68 @@ export default function TestTaking() {
     setIsFinished(true);
     const { data: { user } } = await supabase.auth.getUser();
     
-    // Сохраняем попытку в БД
     if (user) {
+      const finalScorePercent = Math.round((score / questions.length) * 100);
+      
+      // 1. Сохраняем попытку в БД
       await supabase.from('quiz_attempts').insert({
         user_id: user.id,
         quiz_id: id,
-        score: Math.round((score / questions.length) * 100)
+        score: finalScorePercent
       });
+
+      // 2. Рассчитываем опыт (базовый 33 + бонус за точность)
+      const calculatedXp = 33 + Math.floor(finalScorePercent / 2);
+      setXpGained(calculatedXp);
+
+      // 3. Получаем текущий профиль, чтобы прибавить значения
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('xp, tests_completed')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        // 4. Обновляем таблицу profiles (Ранг и Статистика на Dashboard зависят от этого)
+        await supabase
+          .from('profiles')
+          .update({
+            xp: (profile.xp || 0) + calculatedXp,
+            tests_completed: (profile.tests_completed || 0) + 1
+          })
+          .eq('id', user.id);
+
+        // 5. Создаем реальное уведомление в БД
+        await supabase.from('notifications').insert({
+          user_id: user.id,
+          type: 'achievement',
+          content: `Вы получили ${calculatedXp} XP за прохождение теста!`,
+          is_read: false
+        });
+      }
     }
   }
 
   if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   if (isFinished) {
+    const percent = Math.round((score / questions.length) * 100);
     return (
       <AppLayout>
         <div className="max-w-md mx-auto text-center py-20 space-y-8 animate-in zoom-in duration-300">
           <div className="relative inline-block">
-             <CheckCircle2 className="h-24 w-24 text-success mx-auto" />
-             <div className="absolute inset-0 bg-success/20 blur-3xl rounded-full -z-10"></div>
+             <CheckCircle2 className="h-24 w-24 text-green-500 mx-auto" />
+             <div className="absolute inset-0 bg-green-500/20 blur-3xl rounded-full -z-10"></div>
           </div>
           <h1 className="text-4xl font-black uppercase italic tracking-tighter">Результат</h1>
           <div className="p-8 rounded-[2.5rem] bg-card border-2 border-border shadow-2xl">
-            <p className="text-6xl font-black text-primary mb-2">{Math.round((score / questions.length) * 100)}%</p>
-            <p className="text-muted-foreground font-bold">Вы ответили правильно на {score} из {questions.length} вопросов</p>
+            <p className="text-6xl font-black text-primary mb-2">{percent}%</p>
+            <p className="text-muted-foreground font-bold mb-4">
+              Вы ответили правильно на {score} из {questions.length} вопросов
+            </p>
+            <div className="bg-primary/10 rounded-xl py-2 px-4 inline-block">
+               <span className="text-primary font-black">+ {xpGained} XP НАЧИСЛЕНО</span>
+            </div>
           </div>
           <button onClick={() => navigate('/tests')} className="w-full bg-foreground text-background font-black py-5 rounded-2xl hover:scale-105 transition-all uppercase tracking-widest text-xs">
             К списку тестов
@@ -90,7 +126,6 @@ export default function TestTaking() {
   return (
     <AppLayout>
       <div className="max-w-3xl mx-auto py-10 px-4">
-        {/* Progress Bar */}
         <div className="mb-12">
           <div className="flex justify-between items-center mb-4">
              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Вопрос {currentStep + 1} / {questions.length}</span>
@@ -106,12 +141,11 @@ export default function TestTaking() {
           </div>
         </div>
 
-        {/* Question Area */}
         <div className="space-y-8">
-          <h2 className="text-3xl font-bold leading-tight text-foreground">{currentQ.question_text}</h2>
+          <h2 className="text-3xl font-bold leading-tight text-foreground">{currentQ?.question_text}</h2>
           
           <div className="grid gap-4">
-            {currentQ.options.map((option: string, idx: number) => (
+            {currentQ?.options.map((option: string, idx: number) => (
               <button
                 key={idx}
                 onClick={() => setSelectedOption(idx)}
