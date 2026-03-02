@@ -110,7 +110,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       )}>
         <div className="flex h-16 items-center gap-3 border-b border-border px-6">
           <GraduationCap className="h-8 w-8 text-primary" />
-          <span className="text-xl font-black tracking-tight uppercase">EduStream</span>
+          <span className="text-xl font-black tracking-tight uppercase">StudyTalk</span>
         </div>
 
         <nav className="flex-1 space-y-1 p-4">
